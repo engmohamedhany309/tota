@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>totaa</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: #87CEEB;
+        }
+
+        canvas {
+            display: block;
+            background: #87CEEB;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        button {
+            padding: 15px 25px;
+            font-size: 18px;
+            margin-left: 5px;
+            margin-bottom: 18%;
+            cursor: pointer;
+            background-color: rgba(0, 150, 255, 0.7);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background-color: rgba(0, 150, 255, 1);
+        }
+
+        button:active {
+            transform: translateY(2px);
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 40px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 20px;
+            display: none;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 15;
+        }
+
+        #gameOver button {
+            font-size: 20px;
+            margin-top: 15px;
+        }
+
+        #score {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 30px;
+            color: white;
+            z-index: 10;
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30%;
+            height: 50%;
+            background-image: url('myface_gameover.png');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            z-index: 20;
+        }
+
+        #startScreen button {
+            padding: 20px 40px;
+            font-size: 24px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="controls">
+    <button id="upButton">Up</button>
+    <button id="downButton">Down</button>
+</div>
+
+<div id="score">Score: 0</div>
+
+<div id="gameOver">
+    <p>خسرتي يعبيطه</p>
+    <p id="finalScore"></p>
+    <button onclick="restart()">العب تاني</button>
+</div>
+
+<div id="startScreen">
+    <button onclick="startGame()">Start</button>
+</div>
+
+<audio id="bgMusic" loop>
+    <source src="https://vgmsite.com/soundtracks/super-mario-bros/rfgxutdk/01%20Overworld%20BGM.mp3" type="audio/mpeg">
+    متصفحك لا يدعم تشغيل الصوت.
+</audio>
+
+<audio id="gameOverSound">
+    <source src="https://www.soundjay.com/button/beep-07.wav" type="audio/mpeg">
+    متصفحك لا يدعم تشغيل الصوت.
+</audio>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const normalFace = new Image();
+    normalFace.src = 'myface.png';
+
+    const gameOverFace = new Image();
+    gameOverFace.src = 'myface_gameover.png';
+
+    let bird = {
+        x: 100,
+        y: 150,
+        width: 60,
+        height: 60,
+        velocity: 0,
+        gravity: 0.1,
+        lift: -7,
+        dead: false,
+        img: normalFace
+    };
+
+    let pipes = [];
+    let frame = 0;
+    let animation;
+    let score = 0;
+    let isMovingUp = false;
+    let isMovingDown = false;
+
+    const pipeSpeed = window.innerWidth <= 768 ? 3 : 5;
+    const birdSpeed = bird.lift;
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!bird.dead) {
+            bird.velocity += bird.gravity;
+            bird.y += bird.velocity;
+        }
+
+        ctx.drawImage(bird.img, bird.x, bird.y, bird.width, bird.height);
+
+        if (frame % 80 === 0 && !bird.dead) {  // إضافة شرط عند الخسارة
+            let top = Math.random() * (canvas.height / 2);
+            let gap = 160;
+            let pipeColor = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            pipeColor.addColorStop(0, 'green');
+            pipeColor.addColorStop(1, 'darkgreen');
+            pipes.push({
+                x: canvas.width,
+                top: top,
+                bottom: top + gap,
+                width: 80,
+                color: pipeColor
+            });
+        }
+
+        for (let i = 0; i < pipes.length; i++) {
+            let p = pipes[i];
+            if (!bird.dead) {  
+                p.x -= pipeSpeed;
+            }
+
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, 0, p.width, p.top);
+            ctx.fillRect(p.x, p.bottom, p.width, canvas.height - p.bottom);
+
+            if (
+                bird.x < p.x + p.width &&
+                bird.x + bird.width > p.x &&
+                (bird.y < p.top || bird.y + bird.height > p.bottom)
+            ) {
+                gameOver();
+            }
+
+            if (p.x + p.width < bird.x && !p.passed && !bird.dead) {
+                score++;
+                p.passed = true;
+                document.getElementById('score').innerText = 'Score: ' + score;
+            }
+        }
+
+        frame++;
+        updateBirdMovement();
+        animation = requestAnimationFrame(draw);
+    }
+
+    function moveUp() {
+        if (!bird.dead) {
+            bird.velocity = birdSpeed;
+        }
+    }
+
+    function moveDown() {
+        if (!bird.dead) {
+            bird.velocity = -birdSpeed;
+        }
+    }
+
+    const isMobile = window.innerWidth <= 768;
+
+    if (isMobile) {
+        document.getElementById('upButton').addEventListener('touchstart', () => { isMovingUp = true; });
+        document.getElementById('downButton').addEventListener('touchstart', () => { isMovingDown = true; });
+        document.getElementById('upButton').addEventListener('touchend', () => { isMovingUp = false; });
+        document.getElementById('downButton').addEventListener('touchend', () => { isMovingDown = false; });
+    } else {
+        document.getElementById('upButton').addEventListener('mousedown', () => { isMovingUp = true; });
+        document.getElementById('downButton').addEventListener('mousedown', () => { isMovingDown = true; });
+        document.getElementById('upButton').addEventListener('mouseup', () => { isMovingUp = false; });
+        document.getElementById('downButton').addEventListener('mouseup', () => { isMovingDown = false; });
+    }
+
+    function updateBirdMovement() {
+        if (isMovingUp && !bird.dead) {
+            bird.velocity = bird.lift;
+        } else if (isMovingDown && !bird.dead) {
+            bird.velocity = -bird.lift;
+        } else if (!isMovingUp && !isMovingDown && !bird.dead) {
+            bird.velocity = 0;
+        }
+    }
+
+    function gameOver() {
+        bird.dead = true;
+        bird.velocity = 0;
+        bird.img = gameOverFace;
+        cancelAnimationFrame(animation);
+
+        document.getElementById('score').style.display = 'none';
+        document.getElementById('finalScore').innerText = 'Score: ' + score;
+        document.getElementById('gameOver').style.display = 'block';
+
+        document.getElementById('bgMusic').pause();
+        document.getElementById('gameOverSound').play();
+    }
+
+    function restart() {
+        cancelAnimationFrame(animation);
+        bird.y = 150;
+        bird.velocity = 0;
+        bird.dead = false;
+        bird.img = normalFace;
+        pipes = [];
+        score = 0;
+        frame = 0;
+
+        document.getElementById('score').innerText = 'Score: 0';
+        document.getElementById('score').style.display = 'block';
+        document.getElementById('gameOver').style.display = 'none';
+
+        document.getElementById('bgMusic').play();
+        draw();
+    }
+
+    function startGame() {
+        document.getElementById('startScreen').style.display = 'none';
+        document.getElementById('bgMusic').play();
+        draw();
+    }
+
+</script>
+
+</body>
+</html>
